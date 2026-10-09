@@ -4,13 +4,14 @@
 const reduced = () => window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
 
 export class Ruler {
-  constructor(host, { onChange } = {}) {
-    this.host = host; this.onChange = onChange;
+  constructor(host, { onChange, onBlocked } = {}) {
+    this.host = host; this.onChange = onChange; this.onBlocked = onBlocked;
     host.classList.add('ruler');
     host.setAttribute('dir', 'ltr');
     host.tabIndex = 0;
     host.setAttribute('role', 'slider');
-    host.innerHTML = `<div class="ru-scale"><div class="ru-track"></div></div><div class="ru-band"></div><div class="ru-needle"></div>`;
+    host.innerHTML = `<div class="ru-scale"><div class="ru-track"></div></div><div class="ru-band"></div><div class="ru-needle"></div>
+      <button type="button" class="ru-step l" tabindex="-1" aria-label="ערך קודם">‹</button><button type="button" class="ru-step r" tabindex="-1" aria-label="ערך הבא">›</button>`;
     this.track = host.querySelector('.ru-track');
     this.band = host.querySelector('.ru-band');
     this.items = []; this.index = 0; this.x = 0; this.W = 48; this.disabled = false; this.anim = 0;
@@ -101,9 +102,17 @@ export class Ruler {
 
   bind() {
     const h = this.host;
+    // iOS: claim the touch so Safari never turns the drag into a page scroll/bounce (which cancels the pointer stream)
+    h.addEventListener('touchstart', (e) => { if (!e.target.closest('.ru-step')) e.preventDefault(); }, { passive: false });
+    h.addEventListener('touchmove', (e) => e.preventDefault(), { passive: false });
+    h.querySelectorAll('.ru-step').forEach(b => {
+      b.addEventListener('pointerdown', (e) => e.stopPropagation());
+      b.addEventListener('click', (e) => { e.stopPropagation(); if (!this.disabled) this.nudge(b.classList.contains('r') ? 1 : -1); });
+    });
     let sx = 0, sy = 0, lastX = 0, lastT = 0, v = 0, moved = 0, startX = 0;
     h.addEventListener('pointerdown', (e) => {
-      if (this.disabled) return;
+      if (e.target.closest('.ru-step')) return;
+      if (this.disabled) { this.onBlocked && this.onBlocked(); return; }
       if (this.grid) {
         const it = e.target.closest('.ru-it'); if (!it) return;
         const i = +it.dataset.i; if (i !== this.index) { this.setIndex(i, false); this.onChange && this.onChange(i); }

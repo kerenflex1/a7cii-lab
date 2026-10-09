@@ -261,16 +261,23 @@ export class Sim {
     if (this.dirty && this.scene && !this.ui.review && this.engine) {
       this.dirty = false;
       this.compute();
-      // live view shows subject motion as it would look at the current shutter only when slower than ~1/30 (like a real EVF it doesn't)
-      this.engine.render(this.frameParams());
+      const fast = performance.now() < (this.fastUntil || 0);
+      this.engine.render(this.frameParams({ fast }));
       this.drawOSD(); this.refreshControls(); this.renderTask(); this.updateHist();
       this.opts.onChange && this.opts.onChange(this);
     }
     if (this.raf) this.raf = requestAnimationFrame(this.loop);
   }
+  /** a dial is moving: render a lighter preview now and the full-quality frame once it settles */
+  interact() {
+    this.fastUntil = performance.now() + 260;
+    clearTimeout(this.ui.settle);
+    this.ui.settle = setTimeout(() => this.markDirty(), 300);
+  }
   sizeCanvas() {
     const r = this.$('.lcd').getBoundingClientRect();
-    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    const phone = window.matchMedia && matchMedia('(pointer: coarse)').matches && Math.min(window.innerWidth, window.innerHeight) < 700;
+    const dpr = Math.min(window.devicePixelRatio || 1, phone ? 1.5 : 2);
     const w = Math.round(Math.min(1500, Math.max(600, r.width * dpr)));
     if (this.view.width !== w) { this.view.width = w; this.view.height = Math.round(w * 2 / 3); this.markDirty(); }
   }
@@ -467,6 +474,14 @@ export class Sim {
     R.push(this.seg(sw('zebra'), [[true, 'On'], [false, 'Off']], () => st.zebra, v => { st.zebra = v; }));
     R.push(this.seg(sw('disp'), [[0, 'On'], [1, 'Off']], () => st.disp, v => { st.disp = v; }));
     this.$('.sim-x').addEventListener('click', () => this.stop());
+    // iOS Safari: stop the page from rubber-banding under the camera (that steals and cancels dial drags);
+    // only the chip row and the sheets scroll natively
+    this.root.addEventListener('touchmove', (e) => {
+      if (e.target.closest('.dk-chips, .sh-in')) return;
+      const panel = e.target.closest('.sim-panel');
+      if (panel && !e.target.closest('.ruler') && panel.scrollHeight > panel.clientHeight + 2) return;   // landscape panel may scroll
+      e.preventDefault();
+    }, { passive: false });
     this.root.querySelectorAll('.sh-close, .sh-go').forEach(b => b.addEventListener('click', () => this.openSheet(null)));
     this.root.querySelectorAll('.sim-sheet').forEach(sh => sh.addEventListener('click', (e) => { if (e.target === sh) this.openSheet(null); }));
     const pill = this.$('.sim-pill'); if (pill) pill.addEventListener('click', () => this.openSheet('task'));

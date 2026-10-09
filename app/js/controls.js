@@ -87,7 +87,7 @@ export function buildControls(sim) {
       set: (i) => { const v = i === 0 ? 'AUTO' : C.ISOS[i - 1]; st.iso = v; if (v !== 'AUTO') st.isoManual = v; },
       enabled: () => sim.locked('iso') ? lockMsg : st.mode === 'AUTO' ? { ok: false, why: 'ב-AUTO ה-ISO אוטומטי.', act: goMode('A') } : { ok: true },
       auto: () => st.iso === 'AUTO' || st.mode === 'AUTO',
-      chip: () => (st.iso === 'AUTO' || st.mode === 'AUTO' ? 'A ' : '') + exp().iso,
+      chip: () => String(exp().iso),
       big: () => (st.iso === 'AUTO' || st.mode === 'AUTO') ? `ISO AUTO → ${exp().iso}` : `ISO ${exp().iso}`,
     },
     {

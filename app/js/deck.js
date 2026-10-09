@@ -39,7 +39,10 @@ export class Deck {
         <div class="dk-stats" dir="rtl"></div>
       </div>`;
     this.$ = (s) => host.querySelector(s);
-    this.ruler = new Ruler(this.$('.dk-ruler'), { onChange: (i) => this.turn(i) });
+    this.ruler = new Ruler(this.$('.dk-ruler'), {
+      onChange: (i) => this.turn(i),
+      onBlocked: () => { const m = this.$('.dk-msg'); m.classList.remove('pulse'); void m.offsetWidth; m.classList.add('pulse'); },
+    });
     this.buildChips();
     this.bindButtons();
     this.cur = null;
@@ -84,6 +87,7 @@ export class Deck {
     const c = this.byId[this.cur]; if (!c) return;
     const en = c.enabled(); if (!en.ok) return;
     c.set(i);
+    this.sim.interact();
     this.sim.markDirty();
   }
 

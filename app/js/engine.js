@@ -313,7 +313,8 @@ export class Engine {
     const f = p.focal, N = p.N, s = p.focusMM;
     const cocAt = d => (f * f / (N * Math.max(s - f, 1))) * Math.abs(d - s) / d * p.pxPerMM * 0.5;
     const maxR = Math.min(56, Math.max(cocAt(this.meta.depth.min * 1000), cocAt(this.meta.depth.max * 1000)));
-    const count = Math.round(Math.min(220, Math.max(24, maxR * maxR * 0.45)));
+    let count = Math.round(Math.min(220, Math.max(24, maxR * maxR * 0.45)));
+    if (p.fast) count = Math.min(count, 40);        // live preview while a dial turns; full quality when it stops
     const D = this.dof; gl.useProgram(D.p);
     gl.bindFramebuffer(gl.FRAMEBUFFER, this.fbo[1].fb);
     bind(0, this.fbo[0].t); gl.uniform1i(D.u.uSrc, 0);

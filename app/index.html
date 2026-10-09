@@ -55,7 +55,26 @@ main{max-width:1180px;margin:0 auto;padding-inline:16px;padding-block:20px 60px}
 .hero-art{display:grid;gap:8px;min-width:0}
 .hero-top{width:100%;filter:drop-shadow(0 18px 30px rgba(0,0,0,.55))}
 .hero-lens .lens-ctl,.hero-lens .lens-extra{display:none}
-.hero-lens .lens-draw{max-width:420px;background:none;border:0}
+.hero-body{position:relative;filter:drop-shadow(0 18px 30px rgba(0,0,0,.55))}.hero-body svg{width:100%;height:auto;display:block}
+.hero-screen{position:absolute;background:#000 center/cover no-repeat}
+.hero-lens .l3-views,.hero-lens .l3-read,.hero-lens .cap{display:none}
+.qart{width:110px;height:72px;border-radius:8px;background:#0c0d0f;display:grid;place-items:center;overflow:hidden}.qart svg,.qart img{width:100%;height:100%;object-fit:contain}
+/* figures */
+.body-fig .art{position:relative;width:100%;max-width:100%;background:radial-gradient(ellipse at 50% 55%,#2b2e34,#141518 72%);border:1px solid var(--line);border-radius:var(--r);padding:0}
+.body-fig .art{padding:3%}.body-fig .art-in{position:relative}.body-fig .art > svg{display:block;width:100%;height:auto}
+.fmk{position:absolute;transform:translate(-50%,-50%);width:22px;height:22px;border-radius:50%;border:0;background:var(--accent);color:#1a1205;font:700 12px/22px var(--f-cam);padding:0;text-align:center;box-shadow:0 2px 6px rgba(0,0,0,.6);z-index:2}
+.fmk.is-on{background:var(--af)}
+@media (max-width:560px){.fmk{width:18px;height:18px;font-size:10px;line-height:18px}}
+.legend li.is-on{border-color:var(--af)}
+[data-part].is-on{filter:drop-shadow(0 0 2px var(--af)) brightness(1.35)}
+.lens3d-fig{display:grid;gap:8px}
+.l3{position:relative;width:100%;aspect-ratio:16/10;background:radial-gradient(ellipse at 50% 55%,#2b2e34,#121316 75%);border:1px solid var(--line);border-radius:var(--r);overflow:hidden;touch-action:none}
+.l3 canvas{width:100%;height:100%;display:block}
+.l3-load{position:absolute;inset:0;display:grid;place-items:center;color:var(--mute)}
+.l3-views{display:flex;gap:6px;flex-wrap:wrap}
+.l3-views button{background:var(--panel-2);border:1px solid var(--line);border-radius:999px;padding:4px 12px;font-size:.88rem;color:var(--soft)}
+.l3-views button[aria-pressed="true"]{border-color:var(--accent);color:var(--accent)}
+.l3-read{color:var(--soft);font-size:.92rem}
 .cta-row{display:flex;gap:10px;flex-wrap:wrap}
 .cta{display:inline-flex;align-items:center;gap:8px;background:var(--accent);color:#1a1205;border:0;border-radius:10px;padding:11px 18px;font-weight:700;text-decoration:none;font-size:1rem}
 .cta.ghost{background:transparent;color:var(--ink);border:1px solid var(--line)}
@@ -267,6 +286,27 @@ kbd{background:var(--panel-2);border:1px solid var(--line);border-bottom-width:2
 .chip{background:var(--panel);border:1px solid var(--line);border-radius:999px;padding:6px 14px;color:var(--soft)}
 .chip[aria-pressed="true"]{color:var(--ink);border-color:var(--accent);background:color-mix(in srgb,var(--accent) 14%,var(--panel))}
 .credits ul{display:grid;gap:6px;color:var(--soft)} .credits h2{font-size:1.2rem;margin-top:20px}
+
+/* ---------- camera surface (the simulator's controls are the camera itself) ---------- */
+.surface{display:block}
+.cam-surface{display:grid;gap:14px;grid-template-columns:minmax(0,1fr);direction:ltr;position:relative}
+@media (min-width:980px){.sim:not(.screen-in-body) .cam-surface{grid-template-columns:minmax(0,1.7fr) minmax(0,1fr);align-items:center}}
+.screen-in-body .cam-surface{grid-template-columns:minmax(0,1fr)}
+.cam-rig{width:100%;max-width:880px;margin-inline:auto;touch-action:none;user-select:none;-webkit-user-select:none}
+.cam-rig{width:100%}
+.cam-top svg,.cam-rear svg{width:100%;height:auto;display:block;overflow:visible}
+.cam-rear{position:relative;margin-top:-1px}
+.cam-surface [data-part]{cursor:pointer}
+.cam-surface [data-part].pressed{filter:brightness(1.6)}
+.cam-lens-wrap{display:grid;gap:4px;justify-items:center;min-width:0;overflow:hidden}
+.cam-lens{width:100%;max-width:760px;aspect-ratio:2.2/1;touch-action:none;position:relative}
+.cam-lens canvas{width:100%;height:100%;display:block}
+.cam-lens-cap{font-family:var(--f-he);direction:rtl;color:var(--mute);font-size:.82rem}
+.cam-lens-fail{color:var(--mute);font-family:var(--f-he);direction:rtl;padding:20px;text-align:center}
+.cam-cap{position:absolute;left:50%;top:-6px;transform:translate(-50%,-100%);background:rgba(12,12,14,.92);border:1px solid var(--line);border-radius:8px;padding:4px 10px;font-family:var(--f-he);direction:rtl;font-size:.88rem;white-space:nowrap;max-width:94%;overflow:hidden;text-overflow:ellipsis;opacity:0;transition:opacity .15s;pointer-events:none;z-index:6}
+.cam-cap.show{opacity:1}
+.lcd.in-body{box-shadow:none;border-radius:1px}
+.acc{display:flex;flex-wrap:wrap;gap:8px;align-items:center;direction:ltr;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:8px 10px}
 </style>
 
 <header class="bar">

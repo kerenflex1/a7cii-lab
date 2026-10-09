@@ -2,6 +2,7 @@
 import COURSE from './course/index.js';
 import { Sim, SCENE_LIST, stopActive } from './sim.js';
 import { renderParts, renderExplorer, lensFigure } from './figures.js';
+import { bodySVG } from './camera-art.js';
 import { PARTS } from './parts.js';
 
 const $ = (s, r = document) => r.querySelector(s);
@@ -63,13 +64,13 @@ function renderHome(scrollToCourse) {
       </div>
     </div>
     <div class="hero-art">
-      <img src="img/body-top.webp" alt="Sony α7C II מלמעלה" class="hero-top">
+      <div class="hero-body">${bodySVG('rear', { screen: true })}<div class="hero-screen" style="background-image:url(scenes/kyoto/poster.jpg)"></div></div>
       <div class="hero-lens"></div>
     </div>
   </section>
   <section class="quick">
-    <a href="#camera" class="qcard"><img src="img/body-rear.webp" alt=""><div><b>הכירו את המצלמה</b><span>כל כפתור וחוגה, על צילום אמיתי</span></div></a>
-    <a href="#lens" class="qcard"><div class="qlens"></div><div><b>הכירו את העדשה</b><span>טבעות, מתגים ו-11 להבי צמצם</span></div></a>
+    <a href="#camera" class="qcard"><div class="qart">${bodySVG('top')}</div><div><b>הכירו את המצלמה</b><span>כל כפתור וחוגה, על צילום אמיתי</span></div></a>
+    <a href="#lens" class="qcard"><div class="qart qlens"></div><div><b>הכירו את העדשה</b><span>טבעות, מתגים ו-11 להבי צמצם</span></div></a>
     <a href="#lab" class="qcard"><img src="scenes/night/poster.jpg" alt=""><div><b>מעבדה חופשית</b><span>7 סצנות: פורטרט, פרח, נוף, לילה, שמש, מים, כלב</span></div></a>
   </section>
   <section class="course" id="course-list">
@@ -83,8 +84,12 @@ function renderHome(scrollToCourse) {
     }).join('')}
   </section>
   <footer class="foot"><a href="#credits">מקורות, קרדיטים ורישיונות</a></footer>`;
-  const hl = $('.hero-lens'); hl.append(lensFigure([], { focal: 35 }));
-  $('.qlens').innerHTML = hl.querySelector('.lens-draw').innerHTML;
+  $('.hero-lens').append(lensFigure([], { focal: 35, view: 'three-quarter' }));
+  import('./lens3d.js').then(m => m.renderLensStill({ view: 'side', focal: 50 })).then(url => { const q = $('.qlens'); if (q && url) q.innerHTML = `<img src="${url}" alt="">`; }).catch(() => {});
+  import('./camera-art.js').then(({ SLOTS, VIEWBOX }) => {
+    const sl = SLOTS.rear.lcd, [X0, Y0, W, H] = VIEWBOX.rear, sc = $('.hero-screen');
+    if (sc) Object.assign(sc.style, { left: (sl.x - X0) / W * 100 + '%', top: (sl.y - Y0) / H * 100 + '%', width: sl.w / W * 100 + '%', height: sl.h / H * 100 + '%' });
+  });
   if (scrollToCourse) $('#course-list').scrollIntoView();
 }
 
@@ -181,7 +186,7 @@ function renderLab() {
     <p class="goal">בחרו סצנה וצלמו בלי משימה. כל המספרים אמיתיים: חיישן 33MP, העדשה 24–50mm F2.8, חשיפה, רעש ועומק שדה מחושבים לכל פיקסל.</p></header>
     <nav class="scene-chips">${SCENE_LIST.map(s => `<button type="button" class="chip" data-id="${s.id}" aria-pressed="${s.id === last}">${s.he}</button>`).join('')}</nav>
     <div class="lab-sim"></div></section>`;
-  const sim = new Sim($('.lab-sim'), { scene: last, frame: window.innerWidth >= 1000 });
+  const sim = new Sim($('.lab-sim'), { scene: last });
   sim.start(last);
   document.querySelectorAll('.scene-chips .chip').forEach(c => c.addEventListener('click', () => {
     document.querySelectorAll('.scene-chips .chip').forEach(x => x.setAttribute('aria-pressed', String(x === c)));
@@ -192,13 +197,13 @@ function renderLab() {
 
 function renderCameraPage() {
   main.innerHTML = `<section class="explorer"><header class="l-head"><div class="eyebrow">הכרת הגוף</div><h1>המצלמה: Sony α7C II</h1>
-    <p class="goal">לחצו על מספר או על שם בחלק כדי לראות מה הוא עושה. הצילומים הם של גוף ה-α7C (זהה בכפתורים ל-α7C II).</p></header><div class="exp"></div></section>`;
+    <p class="goal">לחצו על מספר, על חלק בשרטוט או על שם ברשימה כדי לראות מה הוא עושה. השרטוטים נמדדו מצילומים של הגוף ובקנה מידה של 124×71.1 מ"מ.</p></header><div class="exp"></div></section>`;
   renderExplorer($('.exp'));
   document.title = 'המצלמה · α7C II';
 }
 function renderLensPage() {
   main.innerHTML = `<section class="explorer"><header class="l-head"><div class="eyebrow">הכרת העדשה</div><h1>העדשה: FE 24–50mm F2.8 G</h1>
-    <p class="goal">שרטוט בקנה מידה (Ø74.8 מ"מ, 72.3–92.3 מ"מ אורך). הזיזו את הזום וראו את העדשה מתארכת, סובבו את טבעת הצמצם וראו את 11 הלהבים נסגרים.</p></header>
+    <p class="goal">מודל תלת-ממדי בקנה מידה (Ø74.8 מ"מ, 72.3–92.3 מ"מ אורך). גררו כדי לסובב את העדשה. גררו על טבעת הזום וראו את העדשה מתארכת, ועל טבעת הצמצם וראו את 11 הלהבים נסגרים.</p></header>
     <div class="exp"></div>
     <div class="spec card"><h2>מפרט</h2><dl class="kv">
       <dt>אורך מוקד</dt><dd>24–50 מ"מ (זווית אלכסונית 84°–47°)</dd><dt>צמצם</dt><dd>F2.8 קבוע עד F22, 11 להבים מעוגלים</dd>
@@ -217,8 +222,8 @@ async function renderCredits() {
   }
   main.innerHTML = `<section class="credits"><header class="l-head"><h1>מקורות וקרדיטים</h1></header>
     <h2>תמונות הסצנות</h2><ul>${rows.join('')}</ul>
-    <h2>צילומי המצלמה</h2><p>צילומי גוף ה-α7CR (גוף זהה ל-α7C II) מ-Wikimedia Commons, רישיון CC0. שם הדגם על הגוף עודכן ל-α7C II. רקע הוסר עם BiRefNet.</p>
-    <h2>העדשה</h2><p>שרטוט מקורי בקנה מידה לפי מפרט Sony וצילומי ביקורת (Photography Blog, Phillip Reeve).</p>
+    <h2>המצלמה</h2><p>שרטוטים וקטוריים מקוריים. קווי המתאר נמדדו מצילומי CC0 של גוף ה-α7CR (זהה ל-α7C II) מ-Wikimedia Commons.</p>
+    <h2>העדשה</h2><p>מודל תלת-ממדי מקורי (three.js) לפי מפרט Sony, נבנה בהשוואה לצילומי ביקורת (Photography Blog, Phillip Reeve) ששימשו כרפרנס בלבד.</p>
     <h2>עומק ופיזיקה</h2><p>מפות העומק חושבו עם Apple Depth Pro. פנורמות HDR מ-Poly Haven (CC0). המידע על התפריטים והכפתורים: Sony Help Guide ל-ILCE-7CM2.</p>
     <p class="note">זהו פרויקט לימודי פרטי, ללא קשר רשמי ל-Sony.</p></section>`;
 }

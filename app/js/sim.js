@@ -58,45 +58,20 @@ export class Sim {
     root.innerHTML = `
       ${o.task ? `<div class="sim-task"><div class="eyebrow">משימה</div><p>${o.task.text}</p><ol class="checks"></ol>${o.hint ? `<details class="hint"><summary>רמז</summary><p>${o.hint}</p></details>` : ''}</div>` : ''}
       <div class="sim-stage">
-        ${o.frame ? `<div class="rearframe"><img src="${VIEWS.rear.img}" alt="גב המצלמה" draggable="false"></div>` : ''}
         <div class="lcd" tabindex="0" aria-label="מסך המצלמה. נגיעה בוחרת נקודת פוקוס">
           <canvas class="view" width="1200" height="800"></canvas><div class="osd"></div>
           <div class="loading">טוען סצנה…<div class="bar"><i></i></div></div>
         </div>
       </div>
       <div class="lcd-cap"><span class="scene-note"></span><span class="credit"></span></div>
-      <div class="deck">
-        <div class="grp top-row">
-          <div class="cell"><div class="lab">Mode dial</div><div class="modedial" role="group" aria-label="Mode dial"></div></div>
-          <button class="shutter" type="button" aria-label="כפתור הצילום: החזיקו לפוקוס, שחררו לצילום"><span>החזיקו = פוקוס<br>שחררו = צילום</span></button>
-        </div>
-        <div class="grp dials">
-          <div class="dial" data-d="F"></div><div class="dial" data-d="L"></div><div class="dial" data-d="R"></div>
-        </div>
-        <div class="grp back-row">
-          <div class="btns">
-            <button class="btn" data-b="c1" title="C1: White Balance">C1</button><button class="btn" data-b="fn">Fn</button>
-            <button class="btn" data-b="afon">AF-ON</button><button class="btn" data-b="play">▶</button><button class="btn" data-b="c2">C2</button>
-          </div>
-          <div class="wheel" aria-label="Control wheel">
-            <button class="u" data-k="disp" type="button">DISP</button><button class="r" data-k="iso" type="button">ISO</button>
-            <button class="l" data-k="drive" type="button">◫/⏱</button><button class="d" data-k="index" type="button">⊞</button>
-            <button class="c" data-k="center" type="button" aria-label="Center: Focus Magnifier">●</button>
-          </div>
-        </div>
-        <div class="lens-deck">
-          <div class="lab he">העדשה FE 24–50mm F2.8 G</div>
-          <div class="ring" data-r="zoom"></div><div class="ring" data-r="focus"></div><div class="ring" data-r="ap"></div>
-          <div class="switches">
-            <span class="sw-lab">AF/MF</span><div class="sw" data-s="afmf"></div>
-            <span class="sw-lab">פילטר ND</span><div class="sw" data-s="nd"></div>
-            <span class="sw-lab">אחיזה</span><div class="sw" data-s="tripod"></div>
-            <span class="sw-lab">SteadyShot</span><div class="sw" data-s="steady"></div>
-            <span class="sw-lab">Peaking</span><div class="sw" data-s="peak"></div>
-            <span class="sw-lab">Zebra</span><div class="sw" data-s="zebra"></div>
-          </div>
-        </div>
-      </div>`;
+      <div class="surface"></div>
+      <div class="acc">
+        <span class="sw-lab">אחיזה</span><div class="sw" data-s="tripod"></div>
+        <span class="sw-lab">SteadyShot</span><div class="sw" data-s="steady"></div>
+        <span class="sw-lab">פילטר ND</span><div class="sw" data-s="nd"></div>
+        <span class="sw-lab">Peaking</span><div class="sw" data-s="peak"></div>
+        <span class="sw-lab">Zebra</span><div class="sw" data-s="zebra"></div>
+      </div></div>`;
     this.host.innerHTML = ''; this.host.append(root);
     this.root = root;
     this.$ = (s) => root.querySelector(s);
@@ -115,6 +90,7 @@ export class Sim {
     this.ro = new ResizeObserver(() => this.sizeCanvas()); this.ro.observe(this.$('.lcd'));
     await this.loadScene(sceneId || this.opts.scene || 'kyoto');
     if (this.opts.preset) this.applyPreset(this.opts.preset);
+    await this.buildSurface();
     this.loop = this.loop.bind(this); this.raf = requestAnimationFrame(this.loop);
   }
 
@@ -122,6 +98,7 @@ export class Sim {
     cancelAnimationFrame(this.raf); this.raf = 0;
     if (this.ro) this.ro.disconnect();
     if (this.engine) { this.engine.dispose(); this.engine = null; }
+    if (this.surface) { this.surface.dispose(); this.surface = null; }
     if (active === this) active = null;
     this.opts.onStop && this.opts.onStop(this);
   }
@@ -249,6 +226,7 @@ export class Sim {
       // live view shows subject motion as it would look at the current shutter only when slower than ~1/30 (like a real EVF it doesn't)
       this.engine.render(this.frameParams());
       this.drawOSD(); this.refreshControls(); this.renderTask(); this.updateHist();
+      if (this.surface) this.surface.syncLens(this.st);
       this.opts.onChange && this.opts.onChange(this);
     }
     if (this.raf) this.raf = requestAnimationFrame(this.loop);
@@ -360,7 +338,7 @@ export class Sim {
   fnValue(it) {
     if (it.val) return it.val();
     const v = it.k === 'iso' ? this.st.iso : this.st[it.k];
-    const o = it.opts().find(([id]) => id === v || (typeof id === 'number' && Math.abs(id - v) < 1e-6));
+    const o = it.opts().find(([id]) => id === v || (typeof id === 'number' && Math.abs(id - v) < 0.02));
     return o ? o[1] : String(v);
   }
   locked(k) {
@@ -383,7 +361,7 @@ export class Sim {
       const row = el('div', 'opts');
       for (const [id, label] of it.opts()) {
         const b = el('button', '', label); b.type = 'button';
-        if (id === cur || (typeof id === 'number' && Math.abs(id - cur) < 1e-6)) b.classList.add('sel');
+        if (id === cur || (typeof id === 'number' && Math.abs(id - cur) < 0.02)) b.classList.add('sel');
         b.addEventListener('click', e => { e.stopPropagation(); this.setValue(it.k, id); });
         row.append(b);
       }
@@ -421,7 +399,7 @@ export class Sim {
   }
   stepPicker(d) {
     const it = this.ui.picker, opts = it.opts(), cur = it.k === 'iso' ? this.st.iso : this.st[it.k];
-    let i = opts.findIndex(([id]) => id === cur || (typeof id === 'number' && Math.abs(id - cur) < 1e-6));
+    let i = opts.findIndex(([id]) => id === cur || (typeof id === 'number' && Math.abs(id - cur) < 0.02));
     i = clamp(i + d, 0, opts.length - 1); this.setValue(it.k, opts[i][0]);
   }
   makeWheel(host, label, onStep, getRole) {
@@ -451,86 +429,16 @@ export class Sim {
   }
   refreshControls() { this.refreshers.forEach(f => f()); }
 
-  /* ---------- wiring ---------- */
+  /* ---------- wiring: the camera itself is the control surface ---------- */
   wire() {
     const st = this.st, R = this.refreshers;
-    const md = this.$('.modedial');
-    C.MODES.forEach(m => {
-      const b = el('button', '', m); b.type = 'button';
-      b.addEventListener('click', () => { if (this.locked('mode')) return this.toast('גלגל המצבים נעול בתרגיל הזה'); st.mode = m; st.shift = 0; this.markDirty(); });
-      md.append(b);
-    });
-    R.push(() => md.querySelectorAll('button').forEach((b, i) => { b.setAttribute('aria-pressed', String(C.MODES[i] === st.mode)); b.classList.toggle('locked', this.locked('mode')); }));
-    for (const [id, label] of [['F', 'Front dial'], ['L', 'Rear dial L'], ['R', 'Rear dial R']]) {
-      R.push(this.makeWheel(this.root.querySelector(`.dial[data-d="${id}"]`), label, d => { const r = this.dialRole(id); if (r.step) { r.step(d); this.markDirty(); } }, () => this.dialRole(id).name));
-    }
-    // lens rings
-    const zoom = this.root.querySelector('.ring[data-r="zoom"]');
-    R.push(this.makeWheel(zoom, 'Zoom ring', d => {
-      if (this.locked('zoom')) return this.toast('הזום נעול בתרגיל');
-      if (this.scene.srcFocal >= 50) return this.toast('הסצנה הזו צולמה ב-50 מ"מ, אז הזום כאן קבוע');
-      st.focal = clamp(st.focal + d * 2, this.scene.srcFocal, 50); if (st.focal > 48) st.focal = 50;
-      st.afState = 'idle'; if (!this.focusIsManual()) this.autofocus(true); this.markDirty();
-    }, () => `${st.focal} mm`));
-    zoom.append(el('div', 'marks'));
-    const focus = this.root.querySelector('.ring[data-r="focus"]');
-    R.push(this.makeWheel(focus, 'Focus ring', d => {
-      if (!(this.focusIsManual() || st.focusMode === 'DMF')) return this.toast('טבעת הפוקוס פעילה רק ב-MF או ב-DMF (מתג AF/MF בעדשה, או Focus Mode)');
-      const mfd = C.LENS.mfdMF(st.focal);
-      st.focusDist = st.mfDist = clamp(Math.exp(Math.log(st.focusDist) + d * 0.045), mfd, 1000);
-      if (this.focusIsManual()) { st.magnify = 1; clearTimeout(this.ui.mag); this.ui.mag = setTimeout(() => { st.magnify = 0; this.markDirty(); }, 2500); }
-      this.markDirty();
-    }, () => (st.focusDist > 200 ? '∞' : st.focusDist < 10 ? st.focusDist.toFixed(2) + ' m' : st.focusDist.toFixed(0) + ' m')));
-    const ap = this.root.querySelector('.ring[data-r="ap"]');
-    const ringVals = ['A', 22, 20, 18, 16, 14, 13, 11, 10, 9, 8, 7.1, 6.3, 5.6, 5, 4.5, 4, 3.5, 3.2, 2.8];
-    R.push(this.makeWheel(ap, 'Aperture ring', d => {
-      if (this.locked('ap')) return this.toast('הצמצם נעול בתרגיל');
-      let i = ringVals.indexOf(st.apertureRing); i = clamp(i + d, 0, ringVals.length - 1);
-      st.apertureRing = ringVals[i];
-      if (st.apertureRing !== 'A' && ['S', 'P', 'AUTO'].includes(st.mode)) this.toast('הטבעת לא על A: המצלמה תשתמש בצמצם שבטבעת');
-      this.markDirty();
-    }, () => (st.apertureRing === 'A' ? 'A' : C.fmtF(st.apertureRing))));
-    ap.append(el('div', 'marks', ['A', '22', '16', '11', '8', '5.6', '4', '2.8'].map(v => `<span>${v}</span>`).join('')));
-    R.push(() => {
-      zoom.querySelector('.marks').innerHTML = [24, 28, 35, 50].map(f => `<span class="${Math.abs(f - st.focal) < 2 ? 'cur' : ''}">${f}</span>`).join('');
-      focus.classList.toggle('dim', !(this.focusIsManual() || st.focusMode === 'DMF'));
-      zoom.classList.toggle('dim', !!(this.scene && this.scene.srcFocal >= 50) || this.locked('zoom'));
-    });
     const sw = (k) => this.root.querySelector(`.sw[data-s="${k}"]`);
-    R.push(this.seg(sw('afmf'), [['AF', 'AF'], ['MF', 'MF']], () => st.lensAFMF, v => { st.lensAFMF = v; st.afState = 'idle'; if (v === 'AF') this.autofocus(true); }));
     R.push(this.seg(sw('nd'), [[0, 'ללא'], [3, 'ND8'], [6, 'ND64'], [10, 'ND1000']], () => st.nd || 0, v => { if (this.locked('nd')) return this.toast('נעול בתרגיל'); st.nd = v; if (v) this.toast(`ND${Math.round(2 ** v)}: מוריד ${v} סטופים של אור`); }));
     R.push(this.seg(sw('tripod'), [[false, 'ביד'], [true, 'חצובה']], () => st.tripod, v => { st.tripod = v; }));
     R.push(this.seg(sw('steady'), [[true, 'On'], [false, 'Off']], () => st.steady, v => { st.steady = v; }));
     R.push(this.seg(sw('peak'), [[true, 'On'], [false, 'Off']], () => st.peaking, v => { st.peaking = v; }));
     R.push(this.seg(sw('zebra'), [[true, 'On'], [false, 'Off']], () => st.zebra, v => { st.zebra = v; }));
-    // buttons
-    const B = (k, f) => this.root.querySelector(`[data-b="${k}"]`).addEventListener('click', f);
-    B('fn', () => { this.hideReview(); this.ui.picker = null; this.ui.fnOpen = !this.ui.fnOpen; this.markDirty(); });
-    B('c1', () => { this.ui.fnOpen = false; this.ui.picker = this.FN.find(i => i.k === 'wb'); this.markDirty(); });
-    B('c2', () => { this.ui.fnOpen = false; this.ui.picker = this.FN.find(i => i.k === 'focusMode'); this.toast('כאן C2 משויך ל-Focus Mode. במצלמה אפשר לשייך לו כל פונקציה'); });
-    B('play', () => (this.ui.review ? this.hideReview() : this.showReview()));
-    this.root.querySelector('[data-b="afon"]').addEventListener('pointerdown', () => { if (!this.focusIsManual()) { this.autofocus(false); this.markDirty(); } });
-    this.$('.wheel').addEventListener('click', e => {
-      const k = e.target.dataset.k; if (!k) return;
-      if (k === 'iso') { this.ui.fnOpen = false; this.ui.picker = this.FN.find(i => i.k === 'iso'); this.markDirty(); }
-      if (k === 'disp') { st.disp = (st.disp + 1) % 2; this.markDirty(); }
-      if (k === 'drive') this.toast('Drive Mode: Single Shooting (רצף וטיימר מוסברים בפרק 7)');
-      if (k === 'index') this.showReview();
-      if (k === 'center') {
-        if (this.ui.picker) { this.ui.picker = null; this.markDirty(); return; }
-        st.magnify = st.magnify ? 0 : 1; this.markDirty();
-        if (st.magnify) this.toast(`Focus Magnifier ×${MAG} סביב נקודת הפוקוס`);
-      }
-    });
-    // shutter
-    const sh = this.$('.shutter'); let inside = false;
-    sh.addEventListener('pointerdown', e => { e.preventDefault(); sh.setPointerCapture(e.pointerId); inside = true; this.hideReview(); this.ui.fnOpen = false; this.ui.picker = null; this.halfPress(); });
-    sh.addEventListener('pointermove', e => { const r = sh.getBoundingClientRect(); inside = e.clientX > r.left - 24 && e.clientX < r.right + 24 && e.clientY > r.top - 24 && e.clientY < r.bottom + 24; });
-    sh.addEventListener('pointerup', () => this.release(inside && st.afState !== 'fail'));
-    sh.addEventListener('pointercancel', () => this.release(false));
-    sh.addEventListener('keydown', e => { if ((e.key === ' ' || e.key === 'Enter') && !e.repeat) { e.preventDefault(); this.halfPress(); } });
-    sh.addEventListener('keyup', e => { if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); this.release(st.afState !== 'fail'); } });
-    // touch focus
+    // touch focus on the screen
     this.$('.lcd').addEventListener('pointerdown', e => {
       if (this.ui.review) return;
       if (this.ui.fnOpen || this.ui.picker) { this.ui.fnOpen = false; this.ui.picker = null; this.markDirty(); return; }
@@ -542,6 +450,101 @@ export class Sim {
       if (!this.focusIsManual()) { this.autofocus(false); setTimeout(() => { if (!this.ui.half) { st.afState = 'idle'; this.markDirty(); } }, 900); }
       this.markDirty();
     });
+  }
+
+  async buildSurface() {
+    const { CameraSurface } = await import('./camera-ui.js');
+    const { PARTS } = await import('./parts.js');
+    const st = this.st;
+    const MODE_ORDER = ['AUTO', 'P', 'A', 'S', 'M', '1', '2', '3'];
+    this.surface = new CameraSurface(this.$('.surface'), {
+      state: () => st,
+      slot: (slot, rearEl) => this.placeScreen(slot, rearEl),
+      describe: (id) => {
+        const p = PARTS[id]; const role = { 'front-dial': 'F', 'rear-dial-l': 'L', 'rear-dial-r': 'R' }[id];
+        return `<b>${p ? p.he : id}</b>${p ? ` <span dir="ltr">${p.en}</span>` : ''}${role ? ` · עכשיו: <span dir="ltr">${this.dialRole(role).name}</span>` : ''}`;
+      },
+      dial: (id, s) => {
+        if (id === 'front-dial' || id === 'rear-dial-l' || id === 'rear-dial-r') {
+          const r = this.dialRole({ 'front-dial': 'F', 'rear-dial-l': 'L', 'rear-dial-r': 'R' }[id]); if (r.step) r.step(s);
+        } else if (id === 'mode-dial') {
+          if (this.locked('mode')) return this.toast('גלגל המצבים נעול בתרגיל הזה');
+          let i = MODE_ORDER.indexOf(st.mode);
+          do { i = (i + s + MODE_ORDER.length) % MODE_ORDER.length; } while (/\d/.test(MODE_ORDER[i]));
+          st.mode = MODE_ORDER[i]; st.shift = 0;
+        } else if (id === 'control-wheel') {
+          if (this.ui.picker) this.stepPicker(s);
+          else if (this.ui.fnOpen) this.ui.fnSel = (this.ui.fnSel + s + 12) % 12;
+          else this.toast('גלגל השליטה: ניווט בתפריטים. אפשר לשייך לו פונקציה ב-Custom Key/Dial Set.');
+        } else if (id === 'sq-dial') this.toast('הסימולטור עובד במצב תמונות (סטילס). וידאו מוסבר בפרק 10');
+        this.markDirty();
+      },
+      press: (id) => {
+        const pick = (k) => { this.ui.fnOpen = false; this.ui.picker = this.FN.find(i => i.k === k); };
+        switch (id) {
+          case 'fn': this.hideReview(); this.ui.picker = null; this.ui.fnOpen = !this.ui.fnOpen; break;
+          case 'c1': pick('wb'); break;
+          case 'c2': pick('focusMode'); this.toast('כאן C2 משויך ל-Focus Mode. במצלמה אפשר לשייך לו כל פונקציה'); break;
+          case 'playback': case 'wheel-index': this.ui.review ? this.hideReview() : this.showReview(); break;
+          case 'wheel-iso': pick('iso'); break;
+          case 'wheel-disp': st.disp = (st.disp + 1) % 2; break;
+          case 'wheel-drive': this.toast('Drive Mode: Single Shooting (רצף וטיימר בפרק 7)'); break;
+          case 'wheel-center':
+            if (this.ui.picker) { this.ui.picker = null; break; }
+            if (this.ui.fnOpen) { const it = this.FN[this.ui.fnSel]; if (it.opts) this.ui.picker = it; break; }
+            st.magnify = st.magnify ? 0 : 1; if (st.magnify) this.toast(`Focus Magnifier ×${MAG} סביב נקודת הפוקוס`); break;
+          case 'menu': this.toast('MENU: כל התפריטים מוסברים בשיעורים. בסימולטור משתמשים ב-Fn'); break;
+          case 'movie': this.toast('הקלטת וידאו לא נכללת בסימולטור'); break;
+          case 'power': this.toast('המצלמה דלוקה (ON)'); break;
+          default: { const p = PARTS[id]; if (p) this.toast(p.he); }
+        }
+        this.markDirty();
+      },
+      hold: (id, down, cancel) => {
+        if (id === 'shutter') { if (down) { this.hideReview(); this.ui.fnOpen = false; this.ui.picker = null; this.halfPress(); } else this.release(!cancel && st.afState !== 'fail'); }
+        if (id === 'af-on' && down && !this.focusIsManual()) { this.autofocus(false); this.markDirty(); }
+      },
+      lens: (ls) => {
+        if (ls.focal != null && ls.focal !== st.focal) {
+          if (this.locked('zoom')) { this.toast('הזום נעול בתרגיל'); this.surface.syncLens(st); }
+          else if (this.scene && this.scene.srcFocal >= 50 && ls.focal < 50) { this.toast('הסצנה צולמה ב-50 מ"מ, אז הזום כאן קבוע'); this.surface.syncLens(st); }
+          else { st.focal = Math.max(this.scene ? this.scene.srcFocal : 24, Math.round(ls.focal)); st.afState = 'idle'; if (!this.focusIsManual()) this.autofocus(true); }
+        }
+        if (ls.ring != null && ls.ring !== st.apertureRing) {
+          if (this.locked('ap')) { this.toast('הצמצם נעול בתרגיל'); this.surface.syncLens(st); }
+          else { st.apertureRing = ls.ring; if (ls.ring !== 'A' && ['S', 'P', 'AUTO'].includes(st.mode)) this.toast('טבעת הצמצם לא על A: המצלמה תשתמש בצמצם שבטבעת'); }
+        }
+        if (ls.afmf && ls.afmf !== st.lensAFMF) { st.lensAFMF = ls.afmf; st.afState = 'idle'; if (ls.afmf === 'AF') this.autofocus(true); }
+        if (ls.focusTurn) {
+          if (!(this.focusIsManual() || st.focusMode === 'DMF')) this.toast('טבעת הפוקוס פעילה רק ב-MF או ב-DMF');
+          else {
+            const mfd = C.LENS.mfdMF(st.focal);
+            st.focusDist = st.mfDist = clamp(Math.exp(Math.log(st.focusDist) + ls.focusTurn * 0.045), mfd, 1000);
+            if (this.focusIsManual()) { st.magnify = 1; clearTimeout(this.ui.mag); this.ui.mag = setTimeout(() => { st.magnify = 0; this.markDirty(); }, 2500); }
+          }
+        }
+        if (ls.hold != null) { /* Focus Hold button: lock focus while pressed */ if (ls.hold) this.toast('Focus Hold: הפוקוס ננעל'); }
+        this.markDirty();
+      },
+    }, { hl: this.opts.hl });
+    this.refreshers.push(() => { this.surface.refresh(); });
+  }
+
+  /** wide screens: the live screen sits inside the drawn monitor; phones: it is "flipped out" above the camera */
+  placeScreen(slot, rearEl) {
+    const lcd = this.$('.lcd');
+    const wide = this.root.getBoundingClientRect().width >= 820;
+    if (wide) {
+      rearEl.style.position = 'relative';
+      Object.assign(lcd.style, { position: 'absolute', left: slot.left * 100 + '%', top: slot.top * 100 + '%', width: slot.width * 100 + '%', height: slot.height * 100 + '%', aspectRatio: 'auto' });
+      lcd.classList.add('in-body'); rearEl.append(lcd);
+      this.root.classList.add('screen-in-body');
+    } else {
+      lcd.removeAttribute('style'); lcd.classList.remove('in-body');
+      this.$('.sim-stage').append(lcd);
+      this.root.classList.remove('screen-in-body');
+    }
+    this.sizeCanvas();
   }
 
   halfPress() {

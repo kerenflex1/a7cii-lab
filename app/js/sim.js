@@ -1,7 +1,7 @@
 // Camera simulator: one instance = LCD + controls + optional mission. Only one WebGL engine is alive at a time.
 import { Engine, LSAT, SENSOR } from './engine.js';
 import * as C from './camera.js';
-import { VIEWS } from './parts.js';
+import { Deck } from './deck.js';
 
 export const SCENE_LIST = [
   { id: 'kyoto', he: 'פורטרט ברחוב' }, { id: 'flower', he: 'פרח בתקריב' }, { id: 'meadow', he: 'נוף ופרחים' },
@@ -51,33 +51,59 @@ export class Sim {
     this.build();
   }
 
-  /* ---------- DOM ---------- */
+  /* ---------- DOM: a full-screen camera ---------- */
   build() {
-    const o = this.opts;
-    const root = el('div', 'sim' + (o.frame ? ' framed' : ''));
+    const o = this.opts, t = o.task;
+    const root = el('div', 'sim sim-fs');
+    root.setAttribute('role', 'dialog'); root.setAttribute('aria-modal', 'true'); root.setAttribute('aria-label', 'סימולטור המצלמה');
     root.innerHTML = `
-      ${o.task ? `<div class="sim-task"><div class="eyebrow">משימה</div><p>${o.task.text}</p><ol class="checks"></ol>${o.hint ? `<details class="hint"><summary>רמז</summary><p>${o.hint}</p></details>` : ''}</div>` : ''}
-      <div class="sim-stage">
-        <div class="lcd" tabindex="0" aria-label="מסך המצלמה. נגיעה בוחרת נקודת פוקוס">
-          <canvas class="view" width="1200" height="800"></canvas><div class="osd"></div>
-          <div class="loading">טוען סצנה…<div class="bar"><i></i></div></div>
+      <header class="sim-top">
+        <button type="button" class="sim-x" aria-label="סגירת המצלמה">✕</button>
+        ${o.scenePicker ? `<button type="button" class="sim-scene" aria-haspopup="dialog"><span class="sc-name"></span><i>▾</i></button>` : `<div class="sim-title"><span class="sc-name"></span></div>`}
+        ${t ? `<button type="button" class="sim-pill" aria-haspopup="dialog"><span>משימה</span><span class="dots"></span></button>` : '<span></span>'}
+      </header>
+      <div class="sim-main">
+        <div class="vf">
+          <div class="lcd" tabindex="0" aria-label="מסך המצלמה. נגיעה בוחרת נקודת פוקוס">
+            <canvas class="view" width="1200" height="800"></canvas><div class="osd"></div>
+            <div class="loading">טוען סצנה…<div class="bar"><i></i></div></div>
+          </div>
+          <div class="lcd-cap"><span class="credit"></span></div>
         </div>
+        <div class="sim-panel"><div class="deck-host"></div></div>
       </div>
-      <div class="lcd-cap"><span class="scene-note"></span><span class="credit"></span></div>
-      <div class="surface"></div>
-      <div class="acc">
-        <span class="sw-lab">אחיזה</span><div class="sw" data-s="tripod"></div>
-        <span class="sw-lab">SteadyShot</span><div class="sw" data-s="steady"></div>
-        <span class="sw-lab">פילטר ND</span><div class="sw" data-s="nd"></div>
-        <span class="sw-lab">Peaking</span><div class="sw" data-s="peak"></div>
-        <span class="sw-lab">Zebra</span><div class="sw" data-s="zebra"></div>
-      </div></div>`;
+      ${t ? `<div class="sim-sheet" data-sheet="task" hidden><div class="sh-in">
+        <div class="eyebrow">משימה</div><p class="tk-text">${t.text}</p><ol class="checks"></ol>
+        ${o.hint ? `<details class="hint"><summary>רמז</summary><p>${o.hint}</p></details>` : ''}
+        <button type="button" class="cta sh-go">יאללה, לצלם</button></div></div>` : ''}
+      <div class="sim-sheet" data-sheet="acc" hidden><div class="sh-in">
+        <div class="eyebrow">אביזרים ותצוגה</div>
+        <div class="acc-grid">
+          <div class="acc-row"><span>אחיזה</span><div class="sw" data-s="tripod"></div></div>
+          <div class="acc-row"><span>SteadyShot (ייצוב בגוף)</span><div class="sw" data-s="steady"></div></div>
+          <div class="acc-row"><span>פילטר ND על העדשה (67 מ"מ)</span><div class="sw" data-s="nd"></div></div>
+          <div class="acc-row"><span>Peaking (קווי פוקוס)</span><div class="sw" data-s="peak"></div></div>
+          <div class="acc-row"><span>Zebra (אזורים שרופים)</span><div class="sw" data-s="zebra"></div></div>
+          <div class="acc-row"><span>DISP: היסטוגרמה במסך</span><div class="sw" data-s="disp"></div></div>
+        </div>
+        <p class="note scene-note"></p>
+        <button type="button" class="cta ghost sh-close">סגירה</button></div></div>
+      ${o.scenePicker ? `<div class="sim-sheet" data-sheet="scene" hidden><div class="sh-in">
+        <div class="eyebrow">בחרו סצנה</div>
+        <div class="scene-grid">${SCENE_LIST.map(s => `<button type="button" class="scene-card" data-id="${s.id}" style="background-image:url(scenes/${s.id}/poster.jpg)"><span>${s.he}</span></button>`).join('')}</div>
+        <button type="button" class="cta ghost sh-close">סגירה</button></div></div>` : ''}`;
     this.host.innerHTML = ''; this.host.append(root);
     this.root = root;
     this.$ = (s) => root.querySelector(s);
     this.view = this.$('.view');
     this.refreshers = [];
     this.wire();
+  }
+
+  openSheet(name) {
+    this.root.querySelectorAll('.sim-sheet').forEach(n => { n.hidden = n.dataset.sheet !== name; });
+    this.root.classList.toggle('sheet-open', !!name);
+    this.markDirty();
   }
 
   async start(sceneId) {
@@ -90,7 +116,16 @@ export class Sim {
     this.ro = new ResizeObserver(() => this.sizeCanvas()); this.ro.observe(this.$('.lcd'));
     await this.loadScene(sceneId || this.opts.scene || 'kyoto');
     if (this.opts.preset) this.applyPreset(this.opts.preset);
-    await this.buildSurface();
+    this.deck = new Deck(this.$('.deck-host'), this);
+    this.refreshers.push(() => this.deck.refresh());
+    if (this.opts.task) this.openSheet('task');
+    this.onKey = (e) => {
+      if (e.target.closest && e.target.closest('input,textarea,select')) return;
+      if (e.key === 'Escape') { if (this.root.classList.contains('sheet-open')) this.openSheet(null); else this.stop(); }
+      if (e.code === 'Space' && !e.repeat && !this.root.classList.contains('sheet-open')) { e.preventDefault(); this.hideReview(); this.halfPress(); }
+    };
+    this.onKeyUp = (e) => { if (e.code === 'Space' && this.ui.half) { e.preventDefault(); this.release(this.st.afState !== 'fail'); } };
+    window.addEventListener('keydown', this.onKey); window.addEventListener('keyup', this.onKeyUp);
     this.loop = this.loop.bind(this); this.raf = requestAnimationFrame(this.loop);
   }
 
@@ -98,7 +133,8 @@ export class Sim {
     cancelAnimationFrame(this.raf); this.raf = 0;
     if (this.ro) this.ro.disconnect();
     if (this.engine) { this.engine.dispose(); this.engine = null; }
-    if (this.surface) { this.surface.dispose(); this.surface = null; }
+    if (this.deck) { this.deck.dispose(); this.deck = null; }
+    window.removeEventListener('keydown', this.onKey); window.removeEventListener('keyup', this.onKeyUp);
     if (active === this) active = null;
     this.opts.onStop && this.opts.onStop(this);
   }
@@ -125,6 +161,8 @@ export class Sim {
     this.autofocus(true);
     L.hidden = true;
     this.$('.scene-note').textContent = meta.note || '';
+    this.root.querySelectorAll('.sc-name').forEach(n => { n.textContent = (SCENE_LIST.find(x => x.id === id) || {}).he || meta.title || ''; });
+    this.root.querySelectorAll('.scene-card').forEach(n => n.setAttribute('aria-pressed', String(n.dataset.id === id)));
     const c = meta.credit || {};
     this.$('.credit').innerHTML = c.url ? `<a href="${c.url}" target="_blank" rel="noopener">${c.author ? c.author + ' · ' : ''}${c.source} · ${c.license}</a>` : '';
     this.renderTask();
@@ -226,7 +264,6 @@ export class Sim {
       // live view shows subject motion as it would look at the current shutter only when slower than ~1/30 (like a real EVF it doesn't)
       this.engine.render(this.frameParams());
       this.drawOSD(); this.refreshControls(); this.renderTask(); this.updateHist();
-      if (this.surface) this.surface.syncLens(this.st);
       this.opts.onChange && this.opts.onChange(this);
     }
     if (this.raf) this.raf = requestAnimationFrame(this.loop);
@@ -375,7 +412,13 @@ export class Sim {
       const g = el('div', 'fn');
       this.FN.forEach((it, i) => {
         const b = el('button', i === this.ui.fnSel ? 'sel' : '', `${this.fnValue(it)}<small>${it.name}</small>`); b.type = 'button';
-        b.addEventListener('click', e => { e.stopPropagation(); this.ui.fnSel = i; if (it.opts) { this.ui.picker = it; } this.markDirty(); });
+        b.addEventListener('click', e => {
+          e.stopPropagation(); this.ui.fnSel = i;
+          if (this.deck && this.deck.byId[it.k]) { this.ui.fnOpen = false; this.deck.select(it.k, true); this.toast(`${it.name}: משנים בחוגה הקדמית`); }
+          else if (it.opts) this.ui.picker = it;
+          else this.toast(it.name + ': ' + this.fnValue(it));
+          this.markDirty();
+        });
         g.append(b);
       });
       g.addEventListener('pointerdown', e => e.stopPropagation());
@@ -402,22 +445,6 @@ export class Sim {
     let i = opts.findIndex(([id]) => id === cur || (typeof id === 'number' && Math.abs(id - cur) < 0.02));
     i = clamp(i + d, 0, opts.length - 1); this.setValue(it.k, opts[i][0]);
   }
-  makeWheel(host, label, onStep, getRole) {
-    host.innerHTML = `<div class="lab"><span>${label}</span><b></b></div><div class="knurl" tabindex="0" role="slider" aria-label="${label}"><button class="arr l" type="button" aria-label="${label} −">◀</button><button class="arr r" type="button" aria-label="${label} +">▶</button></div>`;
-    const kn = host.querySelector('.knurl'); let sx = null, acc = 0, pos = 0;
-    kn.addEventListener('pointerdown', e => { if (e.target.closest('.arr')) return; sx = e.clientX; acc = 0; kn.setPointerCapture(e.pointerId); });
-    kn.addEventListener('pointermove', e => {
-      if (sx === null) return;
-      const dx = e.clientX - sx; sx = e.clientX; acc += dx; pos += dx; kn.style.backgroundPositionX = pos + 'px';
-      while (Math.abs(acc) >= 16) { const s = Math.sign(acc); acc -= s * 16; onStep(s); }
-    });
-    const end = () => { sx = null; };
-    kn.addEventListener('pointerup', end); kn.addEventListener('pointercancel', end);
-    host.querySelector('.arr.l').addEventListener('click', () => onStep(-1));
-    host.querySelector('.arr.r').addEventListener('click', () => onStep(1));
-    kn.addEventListener('keydown', e => { if (e.key === 'ArrowLeft') { e.preventDefault(); onStep(-1); } if (e.key === 'ArrowRight') { e.preventDefault(); onStep(1); } });
-    return () => { host.querySelector('.lab b').textContent = getRole(); };
-  }
   seg(host, opts, get, set) {
     host.innerHTML = '';
     for (const [v, l] of opts) {
@@ -429,7 +456,7 @@ export class Sim {
   }
   refreshControls() { this.refreshers.forEach(f => f()); }
 
-  /* ---------- wiring: the camera itself is the control surface ---------- */
+  /* ---------- wiring ---------- */
   wire() {
     const st = this.st, R = this.refreshers;
     const sw = (k) => this.root.querySelector(`.sw[data-s="${k}"]`);
@@ -438,6 +465,17 @@ export class Sim {
     R.push(this.seg(sw('steady'), [[true, 'On'], [false, 'Off']], () => st.steady, v => { st.steady = v; }));
     R.push(this.seg(sw('peak'), [[true, 'On'], [false, 'Off']], () => st.peaking, v => { st.peaking = v; }));
     R.push(this.seg(sw('zebra'), [[true, 'On'], [false, 'Off']], () => st.zebra, v => { st.zebra = v; }));
+    R.push(this.seg(sw('disp'), [[0, 'On'], [1, 'Off']], () => st.disp, v => { st.disp = v; }));
+    this.$('.sim-x').addEventListener('click', () => this.stop());
+    this.root.querySelectorAll('.sh-close, .sh-go').forEach(b => b.addEventListener('click', () => this.openSheet(null)));
+    this.root.querySelectorAll('.sim-sheet').forEach(sh => sh.addEventListener('click', (e) => { if (e.target === sh) this.openSheet(null); }));
+    const pill = this.$('.sim-pill'); if (pill) pill.addEventListener('click', () => this.openSheet('task'));
+    const scb = this.$('.sim-scene'); if (scb) scb.addEventListener('click', () => this.openSheet('scene'));
+    this.root.querySelectorAll('.scene-card').forEach(c => c.addEventListener('click', () => {
+      this.openSheet(null); this.hideReview();
+      this.opts.onScene && this.opts.onScene(c.dataset.id);
+      this.loadScene(c.dataset.id).then(() => { if (this.deck) this.deck.select(this.deck.cur); });
+    }));
     // touch focus on the screen
     this.$('.lcd').addEventListener('pointerdown', e => {
       if (this.ui.review) return;
@@ -452,108 +490,18 @@ export class Sim {
     });
   }
 
-  async buildSurface() {
-    const { CameraSurface } = await import('./camera-ui.js');
-    const { PARTS } = await import('./parts.js');
-    const st = this.st;
-    const MODE_ORDER = ['AUTO', 'P', 'A', 'S', 'M', '1', '2', '3'];
-    this.surface = new CameraSurface(this.$('.surface'), {
-      state: () => st,
-      slot: (slot, rearEl) => this.placeScreen(slot, rearEl),
-      describe: (id) => {
-        const p = PARTS[id]; const role = { 'front-dial': 'F', 'rear-dial-l': 'L', 'rear-dial-r': 'R' }[id];
-        return `<b>${p ? p.he : id}</b>${p ? ` <span dir="ltr">${p.en}</span>` : ''}${role ? ` · עכשיו: <span dir="ltr">${this.dialRole(role).name}</span>` : ''}`;
-      },
-      dial: (id, s) => {
-        if (id === 'front-dial' || id === 'rear-dial-l' || id === 'rear-dial-r') {
-          const r = this.dialRole({ 'front-dial': 'F', 'rear-dial-l': 'L', 'rear-dial-r': 'R' }[id]); if (r.step) r.step(s);
-        } else if (id === 'mode-dial') {
-          if (this.locked('mode')) return this.toast('גלגל המצבים נעול בתרגיל הזה');
-          let i = MODE_ORDER.indexOf(st.mode);
-          do { i = (i + s + MODE_ORDER.length) % MODE_ORDER.length; } while (/\d/.test(MODE_ORDER[i]));
-          st.mode = MODE_ORDER[i]; st.shift = 0;
-        } else if (id === 'control-wheel') {
-          if (this.ui.picker) this.stepPicker(s);
-          else if (this.ui.fnOpen) this.ui.fnSel = (this.ui.fnSel + s + 12) % 12;
-          else this.toast('גלגל השליטה: ניווט בתפריטים. אפשר לשייך לו פונקציה ב-Custom Key/Dial Set.');
-        } else if (id === 'sq-dial') this.toast('הסימולטור עובד במצב תמונות (סטילס). וידאו מוסבר בפרק 10');
-        this.markDirty();
-      },
-      press: (id) => {
-        const pick = (k) => { this.ui.fnOpen = false; this.ui.picker = this.FN.find(i => i.k === k); };
-        switch (id) {
-          case 'fn': this.hideReview(); this.ui.picker = null; this.ui.fnOpen = !this.ui.fnOpen; break;
-          case 'c1': pick('wb'); break;
-          case 'c2': pick('focusMode'); this.toast('כאן C2 משויך ל-Focus Mode. במצלמה אפשר לשייך לו כל פונקציה'); break;
-          case 'playback': case 'wheel-index': this.ui.review ? this.hideReview() : this.showReview(); break;
-          case 'wheel-iso': pick('iso'); break;
-          case 'wheel-disp': st.disp = (st.disp + 1) % 2; break;
-          case 'wheel-drive': this.toast('Drive Mode: Single Shooting (רצף וטיימר בפרק 7)'); break;
-          case 'wheel-center':
-            if (this.ui.picker) { this.ui.picker = null; break; }
-            if (this.ui.fnOpen) { const it = this.FN[this.ui.fnSel]; if (it.opts) this.ui.picker = it; break; }
-            st.magnify = st.magnify ? 0 : 1; if (st.magnify) this.toast(`Focus Magnifier ×${MAG} סביב נקודת הפוקוס`); break;
-          case 'menu': this.toast('MENU: כל התפריטים מוסברים בשיעורים. בסימולטור משתמשים ב-Fn'); break;
-          case 'movie': this.toast('הקלטת וידאו לא נכללת בסימולטור'); break;
-          case 'power': this.toast('המצלמה דלוקה (ON)'); break;
-          default: { const p = PARTS[id]; if (p) this.toast(p.he); }
-        }
-        this.markDirty();
-      },
-      hold: (id, down, cancel) => {
-        if (id === 'shutter') { if (down) { this.hideReview(); this.ui.fnOpen = false; this.ui.picker = null; this.halfPress(); } else this.release(!cancel && st.afState !== 'fail'); }
-        if (id === 'af-on' && down && !this.focusIsManual()) { this.autofocus(false); this.markDirty(); }
-      },
-      lens: (ls) => {
-        if (ls.focal != null && ls.focal !== st.focal) {
-          if (this.locked('zoom')) { this.toast('הזום נעול בתרגיל'); this.surface.syncLens(st); }
-          else if (this.scene && this.scene.srcFocal >= 50 && ls.focal < 50) { this.toast('הסצנה צולמה ב-50 מ"מ, אז הזום כאן קבוע'); this.surface.syncLens(st); }
-          else { st.focal = Math.max(this.scene ? this.scene.srcFocal : 24, Math.round(ls.focal)); st.afState = 'idle'; if (!this.focusIsManual()) this.autofocus(true); }
-        }
-        if (ls.ring != null && ls.ring !== st.apertureRing) {
-          if (this.locked('ap')) { this.toast('הצמצם נעול בתרגיל'); this.surface.syncLens(st); }
-          else { st.apertureRing = ls.ring; if (ls.ring !== 'A' && ['S', 'P', 'AUTO'].includes(st.mode)) this.toast('טבעת הצמצם לא על A: המצלמה תשתמש בצמצם שבטבעת'); }
-        }
-        if (ls.afmf && ls.afmf !== st.lensAFMF) { st.lensAFMF = ls.afmf; st.afState = 'idle'; if (ls.afmf === 'AF') this.autofocus(true); }
-        if (ls.focusTurn) {
-          if (!(this.focusIsManual() || st.focusMode === 'DMF')) this.toast('טבעת הפוקוס פעילה רק ב-MF או ב-DMF');
-          else {
-            const mfd = C.LENS.mfdMF(st.focal);
-            st.focusDist = st.mfDist = clamp(Math.exp(Math.log(st.focusDist) + ls.focusTurn * 0.045), mfd, 1000);
-            if (this.focusIsManual()) { st.magnify = 1; clearTimeout(this.ui.mag); this.ui.mag = setTimeout(() => { st.magnify = 0; this.markDirty(); }, 2500); }
-          }
-        }
-        if (ls.hold != null) { /* Focus Hold button: lock focus while pressed */ if (ls.hold) this.toast('Focus Hold: הפוקוס ננעל'); }
-        this.markDirty();
-      },
-    }, { hl: this.opts.hl });
-    this.refreshers.push(() => { this.surface.refresh(); });
-  }
-
-  /** wide screens: the live screen sits inside the drawn monitor; phones: it is "flipped out" above the camera */
-  placeScreen(slot, rearEl) {
-    const lcd = this.$('.lcd');
-    const wide = this.root.getBoundingClientRect().width >= 820;
-    if (wide) {
-      rearEl.style.position = 'relative';
-      Object.assign(lcd.style, { position: 'absolute', left: slot.left * 100 + '%', top: slot.top * 100 + '%', width: slot.width * 100 + '%', height: slot.height * 100 + '%', aspectRatio: 'auto' });
-      lcd.classList.add('in-body'); rearEl.append(lcd);
-      this.root.classList.add('screen-in-body');
-    } else {
-      lcd.removeAttribute('style'); lcd.classList.remove('in-body');
-      this.$('.sim-stage').append(lcd);
-      this.root.classList.remove('screen-in-body');
-    }
-    this.sizeCanvas();
+  flashMagnify() {
+    this.st.magnify = 1; clearTimeout(this.ui.mag);
+    this.ui.mag = setTimeout(() => { this.st.magnify = 0; this.markDirty(); }, 2200);
   }
 
   halfPress() {
-    this.ui.half = true; this.$('.shutter').classList.add('half');
+    this.ui.half = true; if (this.deck) this.deck.setHalf(true);
     if (!this.focusIsManual()) this.autofocus(false);
     this.st.magnify = 0; this.markDirty();
   }
   release(shoot) {
-    this.ui.half = false; this.$('.shutter').classList.remove('half');
+    this.ui.half = false; if (this.deck) this.deck.setHalf(false);
     if (shoot) this.capture(); else if (this.st.afState === 'ok') { this.st.afState = 'idle'; this.markDirty(); }
   }
 
@@ -641,9 +589,12 @@ export class Sim {
 
   renderTask() {
     const t = this.opts.task; if (!t) return;
-    const ol = this.root.querySelector('.sim-task .checks'); if (!ol) return;
     const res = this.ui.lastRes;
-    ol.innerHTML = t.checks.map((c, i) => `<li class="${res ? (res[i].ok ? 'ok' : 'bad') : ''}">${c.t}</li>`).join('');
+    const ol = this.root.querySelector('.sim-sheet .checks');
+    if (ol) ol.innerHTML = t.checks.map((c, i) => `<li class="${res ? (res[i].ok ? 'ok' : 'bad') : ''}">${c.t}</li>`).join('');
+    const dots = this.root.querySelector('.sim-pill .dots');
+    if (dots) dots.innerHTML = t.checks.map((c, i) => `<i class="${res ? (res[i].ok ? 'ok' : 'bad') : ''}"></i>`).join('');
+    const pill = this.$('.sim-pill'); if (pill) pill.classList.toggle('done', !!(res && res.every(x => x.ok)));
   }
 }
 

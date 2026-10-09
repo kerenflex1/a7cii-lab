@@ -96,7 +96,7 @@ function bodyFigure(view, hl, markers, numbering) {
 /** 3D lens figure (lazy-loads three.js). */
 export function lensFigure(hl = [], opts = {}) {
   const wrap = document.createElement('div'); wrap.className = 'lens3d-fig';
-  wrap.innerHTML = `<div class="l3"><div class="l3-load">טוען את העדשה…</div></div>
+  wrap.innerHTML = `<div class="l3f"><div class="l3-load">טוען את העדשה…</div></div>
     <div class="l3-views" role="group" aria-label="זווית צפייה">
       <button type="button" data-v="side" aria-pressed="true">מהצד</button><button type="button" data-v="three-quarter">באלכסון</button>
       <button type="button" data-v="front">מקדימה</button><button type="button" data-v="rear">מאחור</button></div>
@@ -109,7 +109,7 @@ export function lensFigure(hl = [], opts = {}) {
     io.disconnect();
     try {
       const { createLens3D } = await import('./lens3d.js');
-      const host = wrap.querySelector('.l3'); host.innerHTML = '';
+      const host = wrap.querySelector('.l3f'); host.innerHTML = '';
       L = await createLens3D(host, { focal: opts.focal || 35, ring: 'A', view: opts.view || 'side', interactive: true, highlight: hl, onChange: show });
       show(L.state);
       wrap.querySelectorAll('.l3-views button').forEach(b => b.addEventListener('click', () => {
@@ -119,7 +119,7 @@ export function lensFigure(hl = [], opts = {}) {
       const mo = new MutationObserver(() => { if (!wrap.isConnected) { L.dispose(); mo.disconnect(); } });
       mo.observe(document.getElementById('main') || document.body, { childList: true, subtree: true });
     } catch (e) {
-      console.error(e); wrap.querySelector('.l3').innerHTML = '<div class="l3-load">לא ניתן להציג את העדשה התלת-ממדית במכשיר הזה.</div>';
+      console.error(e); wrap.querySelector('.l3f').innerHTML = '<div class="l3-load">לא ניתן להציג את העדשה התלת-ממדית במכשיר הזה.</div>';
     }
   }, { rootMargin: '200px' });
   io.observe(wrap);

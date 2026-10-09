@@ -158,23 +158,28 @@ async function renderBlock(b, L) {
   }
 }
 
+/** open the camera full screen (phones and desktop alike): everything fits one screen */
+export function openCamera(opts) {
+  stopActive();
+  const host = document.createElement('div');
+  host.className = 'sim-host';
+  document.body.append(host);
+  document.documentElement.classList.add('sim-open');
+  const sim = new Sim(host, {
+    ...opts,
+    onStop: () => { host.remove(); document.documentElement.classList.remove('sim-open'); opts.onClosed && opts.onClosed(); },
+  });
+  sim.start(opts.scene);
+  return sim;
+}
+
 function simBlock(b, L) {
   const d = document.createElement('div'); d.className = 'b-sim';
   const sc = SCENE_LIST.find(s => s.id === b.scene) || { he: b.scene };
-  const poster = () => {
-    d.innerHTML = `<div class="sim-poster" style="background-image:url(scenes/${b.scene}/poster.jpg)">
-      <div class="sp-in"><div class="eyebrow">תרגול בסימולטור · ${sc.he}</div><p>${b.task ? b.task.text : 'נסו בעצמכם.'}</p>
-      <button type="button" class="cta">פתחו את המצלמה</button></div></div>`;
-    d.querySelector('button').addEventListener('click', open);
-  };
-  const open = () => {
-    d.innerHTML = '';
-    const host = document.createElement('div'); d.append(host);
-    const sim = new Sim(host, { scene: b.scene, preset: b.preset, lock: b.lock, task: b.task, hint: b.hint, onStop: () => poster() });
-    sim.start(b.scene);
-    host.scrollIntoView({ block: 'start', behavior: 'smooth' });
-  };
-  poster();
+  d.innerHTML = `<button type="button" class="sim-poster" style="background-image:url(scenes/${b.scene}/poster.jpg)">
+      <span class="sp-in"><span class="eyebrow">תרגול במצלמה · ${sc.he}</span><span class="sp-t">${b.task ? b.task.text : 'נסו בעצמכם.'}</span>
+      <span class="cta">פתחו את המצלמה</span></span></button>`;
+  d.querySelector('.sim-poster').addEventListener('click', () => openCamera({ scene: b.scene, preset: b.preset, lock: b.lock, task: b.task, hint: b.hint }));
   return d;
 }
 
@@ -183,14 +188,12 @@ function renderLab() {
   const last = store.get('a7c2.labScene', 'kyoto');
   main.innerHTML = `<section class="labpage">
     <header class="l-head"><div class="eyebrow">מעבדה חופשית</div><h1>מעבדת הצילום</h1>
-    <p class="goal">בחרו סצנה וצלמו בלי משימה. כל המספרים אמיתיים: חיישן 33MP, העדשה 24–50mm F2.8, חשיפה, רעש ועומק שדה מחושבים לכל פיקסל.</p></header>
-    <nav class="scene-chips">${SCENE_LIST.map(s => `<button type="button" class="chip" data-id="${s.id}" aria-pressed="${s.id === last}">${s.he}</button>`).join('')}</nav>
-    <div class="lab-sim"></div></section>`;
-  const sim = new Sim($('.lab-sim'), { scene: last });
-  sim.start(last);
-  document.querySelectorAll('.scene-chips .chip').forEach(c => c.addEventListener('click', () => {
-    document.querySelectorAll('.scene-chips .chip').forEach(x => x.setAttribute('aria-pressed', String(x === c)));
-    store.set('a7c2.labScene', c.dataset.id); sim.hideReview(); sim.loadScene(c.dataset.id);
+    <p class="goal">בחרו סצנה והמצלמה תיפתח על כל המסך. חיישן 33MP, העדשה 24–50mm F2.8, חשיפה, רעש ועומק שדה מחושבים לכל פיקסל.</p></header>
+    <div class="lab-grid">${SCENE_LIST.map(s => `<button type="button" class="lab-card${s.id === last ? ' last' : ''}" data-id="${s.id}" style="background-image:url(scenes/${s.id}/poster.jpg)"><span>${s.he}</span></button>`).join('')}</div>
+  </section>`;
+  document.querySelectorAll('.lab-card').forEach(c => c.addEventListener('click', () => {
+    store.set('a7c2.labScene', c.dataset.id);
+    openCamera({ scene: c.dataset.id, scenePicker: true, onScene: (id) => store.set('a7c2.labScene', id) });
   }));
   document.title = 'מעבדת הצילום · α7C II';
 }

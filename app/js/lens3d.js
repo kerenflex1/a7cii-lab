@@ -425,7 +425,7 @@ export async function createLens3D(host, opts = {}) {
     for (const id of LENS_PARTS) for (const o of (L.parts[id] || [])) o.traverse(c => {
       if (!c.isMesh) return;
       if (!origEm.has(c)) { c.material = c.material.clone(); origEm.set(c, c.material.emissive ? c.material.emissive.clone() : null); }
-      if (c.material.emissive) { c.material.emissive.copy(hl.has(id) ? new THREE.Color(0xf0892a) : origEm.get(c)); c.material.emissiveIntensity = hl.has(id) ? 0.16 : 1; }
+      if (c.material.emissive) { c.material.emissive.copy(hl.has(id) ? new THREE.Color(0xf0892a) : origEm.get(c)); c.material.emissiveIntensity = hl.has(id) ? (opts.hlStrength || 0.16) : 1; }
     });
     dirty = true;
   }

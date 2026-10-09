@@ -1,0 +1,9 @@
+.DS_Store
+tools/raw/
+tools/work/
+tools/dev/
+__pycache__/
+*.npy
+docs/manuals/*.pdf
+docs/manuals/*.txt
+app/_dev*
